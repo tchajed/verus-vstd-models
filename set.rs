@@ -276,6 +276,14 @@ pub proof fn axiom_set_remove_insert<A>(s: Set<A>, a: A)
 {
 }
 
+pub proof fn lemma_set_remove_different<A>(s: Set<A>, a1: A, a2: A)
+    requires
+        a1 != a2,
+    ensures
+        s.remove(a2).contains(a1) == s.contains(a1),
+{
+}
+
 /// If `a1` does not equal `a2`, then the result of removing element `a2` from set `s`
 /// must contain `a1` if and only if the set contained `a1` before the removal of `a2`.
 #[verifier(external_body)]
@@ -285,6 +293,12 @@ pub proof fn axiom_set_remove_different<A>(s: Set<A>, a1: A, a2: A)
         a1 != a2,
     ensures
         s.remove(a2).contains(a1) == s.contains(a1),
+{
+}
+
+pub proof fn lemma_set_union<A>(s1: Set<A>, s2: Set<A>, a: A)
+    ensures
+        s1.union(s2).contains(a) == (s1.contains(a) || s2.contains(a)),
 {
 }
 
@@ -298,6 +312,12 @@ pub proof fn axiom_set_union<A>(s1: Set<A>, s2: Set<A>, a: A)
 {
 }
 
+pub proof fn lemma_set_intersect<A>(s1: Set<A>, s2: Set<A>, a: A)
+    ensures
+        s1.intersect(s2).contains(a) == (s1.contains(a) && s2.contains(a)),
+{
+}
+
 /// The intersection of sets `s1` and `s2` contains element `a` if and only if
 /// both `s1` and `s2` contain `a`.
 #[verifier(external_body)]
@@ -308,6 +328,12 @@ pub proof fn axiom_set_intersect<A>(s1: Set<A>, s2: Set<A>, a: A)
 {
 }
 
+pub proof fn lemma_set_difference<A>(s1: Set<A>, s2: Set<A>, a: A)
+    ensures
+        s1.difference(s2).contains(a) == (s1.contains(a) && !s2.contains(a)),
+{
+}
+
 /// The set difference between `s1` and `s2` contains element `a` if and only if
 /// `s1` contains `a` and `s2` does not contain `a`.
 #[verifier(external_body)]
@@ -315,6 +341,12 @@ pub proof fn axiom_set_intersect<A>(s1: Set<A>, s2: Set<A>, a: A)
 pub proof fn axiom_set_difference<A>(s1: Set<A>, s2: Set<A>, a: A)
     ensures
         s1.difference(s2).contains(a) == (s1.contains(a) && !s2.contains(a)),
+{
+}
+
+pub proof fn lemma_set_complement<A>(s: Set<A>, a: A)
+    ensures
+        s.complement().contains(a) == !s.contains(a),
 {
 }
 
@@ -382,6 +414,28 @@ pub proof fn axiom_set_empty_finite<A>()
         #[trigger]
         Set::<A>::empty().finite(),
 {
+}
+
+pub proof fn lemma_set_insert_finite<A>(s: Set<A>, a: A)
+    requires
+        s.finite(),
+    ensures
+        #[trigger]
+        s.insert(a).finite(),
+{
+    let els = choose|els: Seq<A>| s.has_els(els);
+    assert forall|x: A| els.push(a).contains(x) implies s.insert(a).contains(x) by {}
+    assert forall|x: A| s.insert(a).contains(x) implies els.push(a).contains(x) by {
+        if s.contains(x) {
+            let i = choose|i: int| 0 <= i < els.len() && els[i] == x;
+            assert(els.push(a)[i] == x);
+        } else {
+            assert(x == a);
+            assert(els.push(a)[els.len() as int] == a);
+            assert(els.push(a).contains(a));
+        }
+    }
+    assert(s.insert(a).has_els(els.push(a)));
 }
 
 /// The result of inserting an element `a` into a finite set `s` is also finite.
