@@ -572,6 +572,18 @@ pub proof fn axiom_set_difference_finite<A>(s1: Set<A>, s2: Set<A>)
 {
 }
 
+pub proof fn lemma_set_choose_finite<A>(s: Set<A>)
+    requires
+        !s.finite(),
+    ensures
+        #[trigger]
+        s.contains(s.choose()),
+{
+    // we just need to prove s is non-empty, and if it were empty its elements would be the empty
+    // sequence and it would be finite
+    assert(!s.has_els(seq![]));
+}
+
 /// An infinite set `s` contains the element `s.choose()`.
 #[verifier(external_body)]
 // #[verifier(broadcast_forall)]
@@ -582,6 +594,19 @@ pub proof fn axiom_set_choose_finite<A>(s: Set<A>)
         #[trigger]
         s.contains(s.choose()),
 {
+}
+
+pub proof fn lemma_set_empty_len<A>()
+    ensures
+        #[trigger]
+        Set::<A>::empty().len() == 0,
+{
+    assert(Set::<A>::empty().has_els_exact(seq![]));  // witness for choose
+    let els = choose|els: Seq<A>| Set::<A>::empty().has_els_exact(els);
+    if els.len() > 0 {
+        assert(Set::<A>::empty().contains(els[0]));
+    }
+    assert(els.len() == 0);
 }
 
 // Trusted axioms about len
