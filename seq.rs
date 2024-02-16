@@ -768,6 +768,4 @@ pub proof fn axiom_seq_add_index2<A>(s1: Seq<A>, s2: Seq<A>, i: int)
 {
 }
 
-fn main() {}
-
 } // verus!
