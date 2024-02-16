@@ -22,6 +22,16 @@ than them being always available), and they also can't be proven alongside the
 axioms because then the proofs just use the axioms. These limitations should
 all be resolved in Verus relatively soon.
 
+## Status
+
+Seq is fully implemented and verified.
+
+Set is implemented but not quite verified (especially the length axioms).
+
+Map needs to be implemented and verified. The model of `Map<K, V>` should be
+something like `{has: spec_fn(K) -> Option<V>}`, with `m.dom() == Set::new(|k|
+(m.has)(k).is_Some())` and `m[k] == (m.has)(k).Some_v()`.
+
 ## Verifying
 
 ```sh
