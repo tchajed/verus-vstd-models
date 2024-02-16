@@ -128,14 +128,25 @@ impl<A> Set<A> {
         self.intersect(Self::new(f))
     }
 
-    /// Returns `true` is the elements of the set are exactly those in `els`.
+    /// Returns `true` is the elements of the set are covered by `els` (for proving finiteness).
     spec fn has_els(self, els: Seq<A>) -> bool {
-        forall|x: A| #[trigger] self.contains(x) <==> els.contains(x)
+        forall|x: A| #[trigger] self.contains(x) ==> els.contains(x)
     }
 
-    spec fn has_els_unique(self, els: Seq<A>) -> bool {
+    spec fn has_els_exact(self, els: Seq<A>) -> bool {
         &&& forall|x: A| #[trigger] self.contains(x) <==> els.contains(x)
         &&& els.no_duplicates()
+    }
+
+    proof fn has_els_to_exact(self, els: Seq<A>) -> (uels: Seq<A>)
+        requires
+            self.has_els(els),
+        ensures
+            self.has_els_exact(uels),
+    {
+        // TODO
+        assume(false);
+        els
     }
 
     /// Returns `true` if the set is finite.
@@ -145,7 +156,7 @@ impl<A> Set<A> {
 
     /// Cardinality of the set. (Only meaningful if a set is finite.)
     pub closed spec fn len(self) -> nat {
-        let els = choose|els: Seq<A>| self.has_els_unique(els);
+        let els = choose|els: Seq<A>| self.has_els_exact(els);
         els.len()
     }
 
@@ -424,7 +435,6 @@ pub proof fn lemma_set_insert_finite<A>(s: Set<A>, a: A)
         s.insert(a).finite(),
 {
     let els = choose|els: Seq<A>| s.has_els(els);
-    assert forall|x: A| els.push(a).contains(x) implies s.insert(a).contains(x) by {}
     assert forall|x: A| s.insert(a).contains(x) implies els.push(a).contains(x) by {
         if s.contains(x) {
             let i = choose|i: int| 0 <= i < els.len() && els[i] == x;
@@ -450,6 +460,18 @@ pub proof fn axiom_set_insert_finite<A>(s: Set<A>, a: A)
 {
 }
 
+pub proof fn lemma_set_remove_finite<A>(s: Set<A>, a: A)
+    requires
+        s.finite(),
+    ensures
+        #[trigger]
+        s.remove(a).finite(),
+{
+    let els = choose|els: Seq<A>| s.has_els(els);
+    // els is an over-approximation
+    assert(s.remove(a).has_els(els));
+}
+
 /// The result of removing an element `a` from a finite set `s` is also finite.
 #[verifier(external_body)]
 // #[verifier(broadcast_forall)]
@@ -460,6 +482,29 @@ pub proof fn axiom_set_remove_finite<A>(s: Set<A>, a: A)
         #[trigger]
         s.remove(a).finite(),
 {
+}
+
+pub proof fn lemma_set_union_finite<A>(s1: Set<A>, s2: Set<A>)
+    requires
+        s1.finite(),
+        s2.finite(),
+    ensures
+        #[trigger]
+        s1.union(s2).finite(),
+{
+    let els1 = choose|els: Seq<A>| s1.has_els(els);
+    let els2 = choose|els: Seq<A>| s2.has_els(els);
+    assert forall|x: A| s1.union(s2).contains(x) implies (els1 + els2).contains(x) by {
+        if s1.contains(x) {
+            let i = choose|i: int| 0 <= i < els1.len() && els1[i] == x;
+            assert((els1 + els2)[i] == x);
+        } else {
+            assert(s2.contains(x));
+            let i = choose|i: int| 0 <= i < els2.len() && els2[i] == x;
+            assert((els1 + els2)[els1.len() + i] == x);
+        }
+    }
+    assert(s1.union(s2).has_els(els1 + els2));
 }
 
 /// The union of two finite sets is finite.
