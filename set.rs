@@ -1,5 +1,5 @@
 use builtin::*;
-use vstd::prelude::{verus, Seq};
+use vstd::prelude::{seq, verus, Seq};
 
 verus! {
 
@@ -133,13 +133,21 @@ impl<A> Set<A> {
         forall|x: A| #[trigger] self.contains(x) <==> els.contains(x)
     }
 
+    spec fn has_els_unique(self, els: Seq<A>) -> bool {
+        &&& forall|x: A| #[trigger] self.contains(x) <==> els.contains(x)
+        &&& els.no_duplicates()
+    }
+
     /// Returns `true` if the set is finite.
     pub closed spec fn finite(self) -> bool {
         exists|els: Seq<A>| self.has_els(els)
     }
 
     /// Cardinality of the set. (Only meaningful if a set is finite.)
-    pub closed spec fn len(self) -> nat;
+    pub closed spec fn len(self) -> nat {
+        let els = choose|els: Seq<A>| self.has_els_unique(els);
+        els.len()
+    }
 
     /// Chooses an arbitrary element of the set.
     ///
@@ -159,9 +167,16 @@ impl<A> Set<A> {
 }
 
 // Trusted axioms
+pub proof fn lemma_set_empty<A>(a: A)
+    ensures
+        !(#[trigger]
+        Set::empty().contains(a)),
+{
+}
+
 /// The empty set contains no elements
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_empty<A>(a: A)
     ensures
         !(#[trigger]
@@ -169,18 +184,31 @@ pub proof fn axiom_set_empty<A>(a: A)
 {
 }
 
+pub proof fn lemma_set_new<A>(f: spec_fn(A) -> bool, a: A)
+    ensures
+        Set::new(f).contains(a) == f(a),
+{
+}
+
 /// A call to `Set::new` with the predicate `f` contains `a` if and only if `f(a)` is true.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_new<A>(f: spec_fn(A) -> bool, a: A)
     ensures
         Set::new(f).contains(a) == f(a),
 {
 }
 
+pub proof fn lemma_set_insert_same<A>(s: Set<A>, a: A)
+    ensures
+        #[trigger]
+        s.insert(a).contains(a),
+{
+}
+
 /// The result of inserting element `a` into set `s` must contains `a`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_insert_same<A>(s: Set<A>, a: A)
     ensures
         #[trigger]
@@ -188,10 +216,18 @@ pub proof fn axiom_set_insert_same<A>(s: Set<A>, a: A)
 {
 }
 
+pub proof fn lemma_set_insert_different<A>(s: Set<A>, a1: A, a2: A)
+    requires
+        a1 != a2,
+    ensures
+        s.insert(a2).contains(a1) == s.contains(a1),
+{
+}
+
 /// If `a1` does not equal `a2`, then the result of inserting element `a2` into set `s`
 /// must contain `a1` if and only if the set contained `a1` before the insertion of `a2`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_insert_different<A>(s: Set<A>, a1: A, a2: A)
     requires
         a1 != a2,
@@ -200,9 +236,16 @@ pub proof fn axiom_set_insert_different<A>(s: Set<A>, a1: A, a2: A)
 {
 }
 
+pub proof fn lemma_set_remove_same<A>(s: Set<A>, a: A)
+    ensures
+        !(#[trigger]
+        s.remove(a).contains(a)),
+{
+}
+
 /// The result of removing element `a` from set `s` must not contain `a`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_remove_same<A>(s: Set<A>, a: A)
     ensures
         !(#[trigger]
@@ -210,10 +253,20 @@ pub proof fn axiom_set_remove_same<A>(s: Set<A>, a: A)
 {
 }
 
+pub proof fn lemma_set_remove_insert<A>(s: Set<A>, a: A)
+    requires
+        s.contains(a),
+    ensures
+        (#[trigger]
+        s.remove(a)).insert(a) == s,
+{
+    lemma_set_ext_equal(s.remove(a).insert(a), s);
+}
+
 /// Removing an element `a` from a set `s` and then inserting `a` back into the set`
 /// is equivalent to the original set `s`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_remove_insert<A>(s: Set<A>, a: A)
     requires
         s.contains(a),
@@ -226,7 +279,7 @@ pub proof fn axiom_set_remove_insert<A>(s: Set<A>, a: A)
 /// If `a1` does not equal `a2`, then the result of removing element `a2` from set `s`
 /// must contain `a1` if and only if the set contained `a1` before the removal of `a2`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_remove_different<A>(s: Set<A>, a1: A, a2: A)
     requires
         a1 != a2,
@@ -238,7 +291,7 @@ pub proof fn axiom_set_remove_different<A>(s: Set<A>, a1: A, a2: A)
 /// The union of sets `s1` and `s2` contains element `a` if and only if
 /// `s1` contains `a` and/or `s2` contains `a`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_union<A>(s1: Set<A>, s2: Set<A>, a: A)
     ensures
         s1.union(s2).contains(a) == (s1.contains(a) || s2.contains(a)),
@@ -248,7 +301,7 @@ pub proof fn axiom_set_union<A>(s1: Set<A>, s2: Set<A>, a: A)
 /// The intersection of sets `s1` and `s2` contains element `a` if and only if
 /// both `s1` and `s2` contain `a`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_intersect<A>(s1: Set<A>, s2: Set<A>, a: A)
     ensures
         s1.intersect(s2).contains(a) == (s1.contains(a) && s2.contains(a)),
@@ -258,7 +311,7 @@ pub proof fn axiom_set_intersect<A>(s1: Set<A>, s2: Set<A>, a: A)
 /// The set difference between `s1` and `s2` contains element `a` if and only if
 /// `s1` contains `a` and `s2` does not contain `a`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_difference<A>(s1: Set<A>, s2: Set<A>, a: A)
     ensures
         s1.difference(s2).contains(a) == (s1.contains(a) && !s2.contains(a)),
@@ -267,16 +320,28 @@ pub proof fn axiom_set_difference<A>(s1: Set<A>, s2: Set<A>, a: A)
 
 /// The complement of set `s` contains element `a` if and only if `s` does not contain `a`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_complement<A>(s: Set<A>, a: A)
     ensures
         s.complement().contains(a) == !s.contains(a),
 {
 }
 
+pub proof fn lemma_set_ext_equal<A>(s1: Set<A>, s2: Set<A>)
+    ensures
+        #[trigger]
+        (s1 =~= s2) <==> (forall|a: A| s1.contains(a) == s2.contains(a)),
+{
+    if forall|a: A| s1.contains(a) == s2.contains(a) {
+        assert forall|a: A| #[trigger] (s1.has)(a) == (s2.has)(a) by {
+            assert((s1.has)(a) == s1.contains(a));
+        }
+    }
+}
+
 /// Sets `s1` and `s2` are equal if and only if they contain all of the same elements.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_ext_equal<A>(s1: Set<A>, s2: Set<A>)
     ensures
         #[trigger]
@@ -284,8 +349,15 @@ pub proof fn axiom_set_ext_equal<A>(s1: Set<A>, s2: Set<A>)
 {
 }
 
+pub proof fn lemma_set_ext_equal_deep<A>(s1: Set<A>, s2: Set<A>)
+    ensures
+        #[trigger]
+        (s1 =~~= s2) <==> s1 =~= s2,
+{
+}
+
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_ext_equal_deep<A>(s1: Set<A>, s2: Set<A>)
     ensures
         #[trigger]
@@ -293,10 +365,18 @@ pub proof fn axiom_set_ext_equal_deep<A>(s1: Set<A>, s2: Set<A>)
 {
 }
 
+pub proof fn lemma_set_empty_finite<A>()
+    ensures
+        #[trigger]
+        Set::<A>::empty().finite(),
+{
+    assert(Set::<A>::empty().has_els(seq![]));
+}
+
 // Trusted axioms about finite
 /// The empty set is finite.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_empty_finite<A>()
     ensures
         #[trigger]
@@ -306,7 +386,7 @@ pub proof fn axiom_set_empty_finite<A>()
 
 /// The result of inserting an element `a` into a finite set `s` is also finite.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_insert_finite<A>(s: Set<A>, a: A)
     requires
         s.finite(),
@@ -318,7 +398,7 @@ pub proof fn axiom_set_insert_finite<A>(s: Set<A>, a: A)
 
 /// The result of removing an element `a` from a finite set `s` is also finite.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_remove_finite<A>(s: Set<A>, a: A)
     requires
         s.finite(),
@@ -330,7 +410,7 @@ pub proof fn axiom_set_remove_finite<A>(s: Set<A>, a: A)
 
 /// The union of two finite sets is finite.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_union_finite<A>(s1: Set<A>, s2: Set<A>)
     requires
         s1.finite(),
@@ -343,7 +423,7 @@ pub proof fn axiom_set_union_finite<A>(s1: Set<A>, s2: Set<A>)
 
 /// The intersection of two finite sets is finite.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_intersect_finite<A>(s1: Set<A>, s2: Set<A>)
     requires
         s1.finite() || s2.finite(),
@@ -355,7 +435,7 @@ pub proof fn axiom_set_intersect_finite<A>(s1: Set<A>, s2: Set<A>)
 
 /// The set difference between two finite sets is finite.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_difference_finite<A>(s1: Set<A>, s2: Set<A>)
     requires
         s1.finite(),
@@ -367,7 +447,7 @@ pub proof fn axiom_set_difference_finite<A>(s1: Set<A>, s2: Set<A>)
 
 /// An infinite set `s` contains the element `s.choose()`.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_choose_finite<A>(s: Set<A>)
     requires
         !s.finite(),
@@ -382,7 +462,7 @@ pub proof fn axiom_set_choose_finite<A>(s: Set<A>)
 // The following, with axiom_set_ext_equal, are enough to build libraries about len.
 /// The empty set has length 0.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_empty_len<A>()
     ensures
         #[trigger]
@@ -393,7 +473,7 @@ pub proof fn axiom_set_empty_len<A>()
 /// The result of inserting an element `a` into a finite set `s` has length
 /// `s.len() + 1` if `a` is not already in `s` and length `s.len()` otherwise.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_insert_len<A>(s: Set<A>, a: A)
     requires
         s.finite(),
@@ -410,7 +490,7 @@ pub proof fn axiom_set_insert_len<A>(s: Set<A>, a: A)
 /// The result of removing an element `a` from a finite set `s` has length
 /// `s.len() - 1` if `a` is in `s` and length `s.len()` otherwise.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_remove_len<A>(s: Set<A>, a: A)
     requires
         s.finite(),
@@ -426,7 +506,7 @@ pub proof fn axiom_set_remove_len<A>(s: Set<A>, a: A)
 
 /// If a finite set `s` contains any element, it has length greater than 0.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_contains_len<A>(s: Set<A>, a: A)
     requires
         s.finite(),
@@ -440,7 +520,7 @@ pub proof fn axiom_set_contains_len<A>(s: Set<A>, a: A)
 
 /// A finite set `s` contains the element `s.choose()` if it has length greater than 0.
 #[verifier(external_body)]
-#[verifier(broadcast_forall)]
+// #[verifier(broadcast_forall)]
 pub proof fn axiom_set_choose_len<A>(s: Set<A>)
     requires
         s.finite(),
