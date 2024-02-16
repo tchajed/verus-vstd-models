@@ -622,6 +622,54 @@ pub proof fn axiom_set_empty_len<A>()
 {
 }
 
+proof fn lemma_len_unique<A>(s: Set<A>, els: Seq<A>)
+    requires
+        s.has_els_exact(els),
+    ensures
+        s.len() == els.len(),
+{
+    let els_len = choose|els: Seq<A>| #[trigger] s.has_els_exact(els) && els.len() == s.len();
+    // TODO
+    assume(false);
+}
+
+pub proof fn lemma_set_insert_len<A>(s: Set<A>, a: A)
+    requires
+        s.finite(),
+    ensures
+        #[trigger]
+        s.insert(a).len() == s.len() + (if s.contains(a) {
+            0int
+        } else {
+            1
+        }),
+{
+    let els = choose|els: Seq<A>| s.has_els(els);
+    let els = s.has_els_to_exact(els);
+    lemma_len_unique(s, els);
+    assert(s.len() == els.len());
+    if s.contains(a) {
+        assert(s.insert(a) =~= s);
+        return ;
+    } else {
+        lemma_set_insert_finite(s, a);
+        assert(els.push(a).no_duplicates());
+        assert forall|x: A| s.insert(a).contains(x) implies els.push(a).contains(x) by {
+            if x == a {
+                assert(els.push(a)[els.len() as int] == a);
+            } else {
+                assert(s.contains(x));
+                let i = choose|i: int| 0 <= i < s.len() && els[i] == x;
+                assert(els.push(a)[i] == x);
+            }
+        }
+        assert forall|x: A| els.push(a).contains(x) implies s.insert(a).contains(x) by {}
+        assert(s.insert(a).has_els_exact(els.push(a)));
+        lemma_len_unique(s.insert(a), els.push(a));
+        return ;
+    }
+}
+
 /// The result of inserting an element `a` into a finite set `s` has length
 /// `s.len() + 1` if `a` is not already in `s` and length `s.len()` otherwise.
 #[verifier(external_body)]
@@ -637,6 +685,26 @@ pub proof fn axiom_set_insert_len<A>(s: Set<A>, a: A)
             1
         }),
 {
+}
+
+pub proof fn lemma_set_remove_len<A>(s: Set<A>, a: A)
+    requires
+        s.finite(),
+    ensures
+        s.len() == #[trigger]
+        s.remove(a).len() + (if s.contains(a) {
+            1int
+        } else {
+            0
+        }),
+{
+    if !s.contains(a) {
+        assert(s.remove(a) =~= s);
+        return ;
+    }
+    assert(s =~= s.remove(a).insert(a));
+    lemma_set_remove_finite(s, a);
+    lemma_set_insert_len(s.remove(a), a);
 }
 
 /// The result of removing an element `a` from a finite set `s` has length
@@ -656,6 +724,34 @@ pub proof fn axiom_set_remove_len<A>(s: Set<A>, a: A)
 {
 }
 
+proof fn lemma_len_zero<A>(s: Set<A>)
+    requires
+        s.finite(),
+        s.len() == 0,
+    ensures
+        s == Set::<A>::empty(),
+{
+    let els = choose|els: Seq<A>| s.has_els(els);
+    let els = s.has_els_to_exact(els);
+    lemma_len_unique(s, els);
+    assert(els =~= seq![]);
+    lemma_set_ext_equal(s, Set::<A>::empty());
+}
+
+pub proof fn lemma_set_contains_len<A>(s: Set<A>, a: A)
+    requires
+        s.finite(),
+        #[trigger]
+        s.contains(a),
+    ensures
+        #[trigger]
+        s.len() != 0,
+{
+    if s.len() == 0 {
+        lemma_len_zero(s);
+    }
+}
+
 /// If a finite set `s` contains any element, it has length greater than 0.
 #[verifier(external_body)]
 // #[verifier(broadcast_forall)]
@@ -668,6 +764,22 @@ pub proof fn axiom_set_contains_len<A>(s: Set<A>, a: A)
         #[trigger]
         s.len() != 0,
 {
+}
+
+pub proof fn lemma_set_choose_len<A>(s: Set<A>)
+    requires
+        s.finite(),
+        #[trigger]
+        s.len() != 0,
+    ensures
+        #[trigger]
+        s.contains(s.choose()),
+{
+    if forall |x: A| !s.contains(x) {
+        lemma_set_empty_len::<A>();
+        lemma_set_ext_equal(s, Set::<A>::empty());
+        assert(false);
+    }
 }
 
 /// A finite set `s` contains the element `s.choose()` if it has length greater than 0.
