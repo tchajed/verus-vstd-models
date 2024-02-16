@@ -403,11 +403,11 @@ proof fn lemma_seq_push_index_same<A>(s: Seq<A>, a: A, i: int)
         #[trigger] s.push(a)[i] == a,
     decreases s
 {
-    lemma_seq_push_len(s, a);
     match s {
         Seq::Nil => {}
         Seq::Cons(x, l) => {
             lemma_seq_push_index_same(*l, a, i-1);
+            lemma_seq_push_len(*l, a);
         }
     }
 }
