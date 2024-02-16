@@ -520,6 +520,23 @@ pub proof fn axiom_set_union_finite<A>(s1: Set<A>, s2: Set<A>)
 {
 }
 
+pub proof fn lemma_set_intersect_finite<A>(s1: Set<A>, s2: Set<A>)
+    requires
+        s1.finite() || s2.finite(),
+    ensures
+        #[trigger]
+        s1.intersect(s2).finite(),
+{
+    if s1.finite() {
+        let els = choose|els: Seq<A>| s1.has_els(els);
+        assert(s1.intersect(s2).has_els(els));
+    } else {
+        assert(s2.finite());
+        let els = choose|els: Seq<A>| s2.has_els(els);
+        assert(s1.intersect(s2).has_els(els));
+    }
+}
+
 /// The intersection of two finite sets is finite.
 #[verifier(external_body)]
 // #[verifier(broadcast_forall)]
@@ -530,6 +547,17 @@ pub proof fn axiom_set_intersect_finite<A>(s1: Set<A>, s2: Set<A>)
         #[trigger]
         s1.intersect(s2).finite(),
 {
+}
+
+pub proof fn lemma_set_difference_finite<A>(s1: Set<A>, s2: Set<A>)
+    requires
+        s1.finite(),
+    ensures
+        #[trigger]
+        s1.difference(s2).finite(),
+{
+    let els = choose|els: Seq<A>| s1.has_els(els);
+    assert(s1.difference(s2).has_els(els));
 }
 
 /// The set difference between two finite sets is finite.
