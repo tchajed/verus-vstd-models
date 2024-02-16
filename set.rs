@@ -1,6 +1,5 @@
 use builtin::*;
-use core::marker;
-use vstd::prelude::verus;
+use vstd::prelude::{verus, Seq};
 
 verus! {
 
@@ -23,27 +22,32 @@ verus! {
 ///
 /// To prove that two sequences are equal, it is usually easiest to use the extensionality
 /// operator `=~=`.
-#[verifier(external_body)]
 #[verifier::ext_equal]
 #[verifier::reject_recursive_types(A)]
 pub struct Set<A> {
-    dummy: marker::PhantomData<A>,
+    has: spec_fn(A) -> bool,
 }
 
 impl<A> Set<A> {
     /// The "empty" set.
-    pub spec fn empty() -> Set<A>;
+    pub closed spec fn empty() -> Set<A> {
+        Set { has: |a| false }
+    }
 
     /// Set whose membership is determined by the given boolean predicate.
-    pub spec fn new<F: Fn(A) -> bool>(f: F) -> Set<A>;
+    pub closed spec fn new(f: spec_fn(A) -> bool) -> Set<A> {
+        Set { has: f }
+    }
 
     /// The "full" set, i.e., set containing every element of type `A`.
     pub open spec fn full() -> Set<A> {
-        Set::empty().complement()
+        Self::new(|a| true)
     }
 
     /// Predicate indicating if the set contains the given element.
-    pub spec fn contains(self, a: A) -> bool;
+    pub closed spec fn contains(self, a: A) -> bool {
+        (self.has)(a)
+    }
 
     /// DEPRECATED: use =~= or =~~= instead.
     /// Returns `true` if for every value `a: A`, it is either in both input sets or neither.
@@ -71,14 +75,20 @@ impl<A> Set<A> {
 
     /// Returns a new set with the given element inserted.
     /// If that element is already in the set, then an identical set is returned.
-    pub spec fn insert(self, a: A) -> Set<A>;
+    pub closed spec fn insert(self, a: A) -> Set<A> {
+        Set::new(|x| self.contains(x) || x == a)
+    }
 
     /// Returns a new set with the given element removed.
     /// If that element is already absent from the set, then an identical set is returned.
-    pub spec fn remove(self, a: A) -> Set<A>;
+    pub closed spec fn remove(self, a: A) -> Set<A> {
+        Set::new(|x| self.contains(x) && x != a)
+    }
 
     /// Union of two sets.
-    pub spec fn union(self, s2: Set<A>) -> Set<A>;
+    pub closed spec fn union(self, s2: Set<A>) -> Set<A> {
+        Set::new(|x| self.contains(x) || s2.contains(x))
+    }
 
     /// `+` operator, synonymous with `union`
     #[verifier(inline)]
@@ -87,7 +97,9 @@ impl<A> Set<A> {
     }
 
     /// Intersection of two sets.
-    pub spec fn intersect(self, s2: Set<A>) -> Set<A>;
+    pub closed spec fn intersect(self, s2: Set<A>) -> Set<A> {
+        Set::new(|x| self.contains(x) && s2.contains(x))
+    }
 
     /// `*` operator, synonymous with `intersect`
     #[verifier(inline)]
@@ -96,7 +108,9 @@ impl<A> Set<A> {
     }
 
     /// Set difference, i.e., the set of all elements in the first one but not in the second.
-    pub spec fn difference(self, s2: Set<A>) -> Set<A>;
+    pub closed spec fn difference(self, s2: Set<A>) -> Set<A> {
+        Set::new(|x| self.contains(x) && !s2.contains(x))
+    }
 
     /// Set complement (within the space of all possible elements in `A`).
     /// `-` operator, synonymous with `difference`
@@ -105,18 +119,27 @@ impl<A> Set<A> {
         self.difference(s2)
     }
 
-    pub spec fn complement(self) -> Set<A>;
+    pub closed spec fn complement(self) -> Set<A> {
+        Set::new(|x| !self.contains(x))
+    }
 
     /// Set of all elements in the given set which satisfy the predicate `f`.
-    pub open spec fn filter<F: Fn(A) -> bool>(self, f: F) -> Set<A> {
+    pub open spec fn filter(self, f: spec_fn(A) -> bool) -> Set<A> {
         self.intersect(Self::new(f))
     }
 
+    /// Returns `true` is the elements of the set are exactly those in `els`.
+    spec fn has_els(self, els: Seq<A>) -> bool {
+        forall|x: A| #[trigger] self.contains(x) <==> els.contains(x)
+    }
+
     /// Returns `true` if the set is finite.
-    pub spec fn finite(self) -> bool;
+    pub closed spec fn finite(self) -> bool {
+        exists|els: Seq<A>| self.has_els(els)
+    }
 
     /// Cardinality of the set. (Only meaningful if a set is finite.)
-    pub spec fn len(self) -> nat;
+    pub closed spec fn len(self) -> nat;
 
     /// Chooses an arbitrary element of the set.
     ///
@@ -128,7 +151,7 @@ impl<A> Set<A> {
         choose|a: A| self.contains(a)
     }
 
-    /// Returns `true` if the sets are disjoint, i.e., if their interesection is
+    /// Returns `true` if the sets are disjoint, i.e., if their intersection is
     /// the empty set.
     pub open spec fn disjoint(self, s2: Self) -> bool {
         forall|a: A| self.contains(a) ==> !s2.contains(a)
