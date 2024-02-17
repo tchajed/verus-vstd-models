@@ -57,6 +57,15 @@ pub proof fn seq_cons_no_duplicates<A>(a: A, l: Seq<A>)
 {
 }
 
+pub proof fn seq_push_no_duplicates<A>(l: Seq<A>, a: A)
+    requires
+        l.no_duplicates(),
+        !l.contains(a),
+    ensures
+        l.push(a).no_duplicates(),
+{
+}
+
 pub proof fn remove_duplicates_spec<A>(l: Seq<A>)
     ensures
         forall|x: A| #[trigger] l.contains(x) <==> remove_duplicates(l).contains(x),
@@ -91,6 +100,125 @@ pub proof fn remove_duplicates_spec<A>(l: Seq<A>)
             }
             seq_cons_no_duplicates(a, remove_duplicates(l.skip(1).filter(pred)));
         }
+        return ;
+    }
+}
+
+pub proof fn seq_push_contains<A>()
+    ensures
+        forall|s: Seq<A>, a: A, x: A| s.push(a).contains(x) <==> s.contains(x) || x == a,
+{
+    assert forall|s: Seq<A>, a: A, x: A| s.push(a).contains(x) <==> s.contains(x) || x == a by {
+        assert(s.push(a)[s.len() as int] == a);
+        if x == a {
+            assert(s.push(a).contains(x));
+        } else if s.contains(x) {
+            let i = choose|i: int| 0 <= i < s.len() && s[i] == x;
+            assert(s.push(a)[i] == x);
+        } else {
+            if s.push(a).contains(x) {
+                let i = choose|i: int| 0 <= i < s.push(a).len() && s.push(a)[i] == x;
+                assert(s[i] == x);
+            }
+        }
+    }
+}
+
+proof fn lemma_seq_subrange_len<A>(s: Seq<A>, j: int, k: int)
+    requires
+        0 <= j <= k <= s.len(),
+    ensures
+        #[trigger]
+        s.subrange(j, k).len() == k - j,
+{
+}
+
+pub proof fn seq_drop_last_contains<A>(s: Seq<A>)
+    requires
+        s.len() >= 1,
+    ensures
+        forall|x: A|
+            (#[trigger]
+            s.drop_last().contains(x) || x == s.last()) <==> s.contains(x),
+{
+    assert forall|x: A| s.len() >= 1 implies (#[trigger]
+    s.drop_last().contains(x) || x == s.last()) <==> s.contains(x) by {
+        if s.len() >= 1 {
+            lemma_seq_subrange_len(s, 0, s.len() as int - 1);
+            assert(s.drop_last().len() == s.len() as int - 1);
+            if x == s.last() {
+                assert(s[s.len() - 1] == x);
+                assert(s.contains(x));
+            } else if s.drop_last().contains(x) {
+                let i = choose|i: int| 0 <= i < s.drop_last().len() && s.drop_last()[i] == x;
+                assert(i < s.len());
+                assert(s[i] == x);
+                assert(s.contains(x));
+            } else if s.contains(x) {
+                let i = choose|i: int| 0 <= i < s.len() && s[i] == x;
+                if x != s.last() {
+                    assert(s.drop_last()[i] == x);
+                }
+            }
+        }
+    }
+}
+
+closed spec fn remove1<A>(s: Seq<A>, a: A) -> Seq<A>
+    decreases s.len(),
+{
+    if s.len() == 0 {
+        seq![]
+    } else {
+        let (s2, x) = (s.drop_last(), s.last());
+        if x == a {
+            s2
+        } else {
+            remove1(s2, a).push(x)
+        }
+    }
+}
+
+proof fn remove1_spec<A>(s: Seq<A>, a: A)
+    requires
+        s.contains(a),
+        s.no_duplicates(),
+    ensures
+        ({
+            let r = remove1(s, a);
+            &&& forall|x: A| r.contains(x) <==> (s.contains(x) && x != a)
+            &&& !r.contains(a)
+            &&& r.no_duplicates()
+            &&& r.len() + 1 == s.len()
+        }),
+    decreases s.len(),
+{
+    if s.len() == 0 {
+        assert(false);
+        return ;
+    }
+    let r = remove1(s, a);
+    if s.last() == a {
+        assert forall|x: A| r.contains(x) implies (s.contains(x) && x != a) by {}
+        assert forall|x: A| (s.contains(x) && x != a) implies r.contains(x) by {
+            let i = choose|i: int| 0 <= i < s.len() && s[i] == x;
+            assert(s.drop_last()[i] == x);
+        }
+        return ;
+    } else {
+        assert(s.drop_last().no_duplicates());
+        seq_push_contains::<A>();
+        let i = choose|i: int| 0 <= i < s.len() && s[i] == a;
+        assert(s.drop_last()[i] == a);
+        remove1_spec(s.drop_last(), a);
+        assert(r == remove1(s.drop_last(), a).push(s.last()));
+        seq_drop_last_contains(s.drop_last());
+        assert forall|x: A| r.contains(x) implies (s.contains(x) && x != a) by {}
+        assert forall|x: A| (s.contains(x) && x != a) implies r.contains(x) by {
+            let i = choose|i: int| 0 <= i < s.len() && s[i] == x;
+            assert(s.drop_last().push(s.last())[i] == x);
+        }
+        seq_push_no_duplicates(remove1(s.drop_last(), a), s.last());
         return ;
     }
 }
@@ -835,10 +963,12 @@ pub proof fn lemma_set_remove_len<A>(s: Set<A>, a: A)
     if !s.contains(a) {
         assert(s.remove(a) =~= s);
         return ;
+    } else {
+        assert(s.remove(a).insert(a) =~= s);
+        lemma_set_remove_finite(s, a);
+        lemma_set_insert_len(s.remove(a), a);
+        return ;
     }
-    assert(s =~= s.remove(a).insert(a));
-    lemma_set_remove_finite(s, a);
-    lemma_set_insert_len(s.remove(a), a);
 }
 
 /// The result of removing an element `a` from a finite set `s` has length
