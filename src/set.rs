@@ -107,7 +107,7 @@ pub proof fn remove_duplicates_spec<A>(l: Seq<A>)
 ///  * [`Set::empty`] gives an empty set
 ///  * [`Set::full`] gives the set of all elements in `A`
 ///  * [`Set::new`] constructs a set from a boolean predicate
-///  * The [`set!`] macro, to construct small core::marker;of a fixed size
+///  * The [`set!`] macro, to construct small sets of a fixed size
 ///  * By manipulating an existing sequence with [`Set::union`], [`Set::intersect`],
 ///    [`Set::difference`], [`Set::complement`], [`Set::filter`], [`Set::insert`],
 ///    or [`Set::remove`].
@@ -726,6 +726,35 @@ pub proof fn axiom_set_empty_len<A>()
         Set::<A>::empty().len() == 0,
 {
 }
+
+/*
+
+    s els1 els2
+    s.has_els_exact(els1)
+    s.has_els_exact(els2)
+
+    need to prove els1.len() == els2.len()
+
+    if els1 == seq![] {
+       s == empty()
+       els2 == seq![]
+        return;
+    }
+
+    destruct els1 -> [a] + els1_rest
+
+    assert s.remove(a).has_els_exact(els1_rest)
+    assert s.remove(a).has_els_exact(els2_rest.filter(|x| x != a))
+    by IH, els1_rest.len() == els2_rest.filter(|x| x != a).len()
+
+    assert els1.len() == els1_rest.len() + 1 (obvious)
+
+    // this step might be easier with a new recursive remove_one definition
+    // rather than filter (whose spec almost certainly can't prove this; it
+    // probably doesn't even show no_duplicates is preserved)
+    assert els2_rest.filter(|x| x != a).len() == els2_rest.len() - 1 (not at all obvious)
+
+*/
 
 proof fn lemma_len_unique<A>(s: Set<A>, els: Seq<A>)
     requires
