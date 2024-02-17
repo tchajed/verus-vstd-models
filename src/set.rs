@@ -71,11 +71,7 @@ pub proof fn remove_duplicates_spec<A>(l: Seq<A>)
         remove_duplicates_spec(l.skip(1).filter(pred));
         seq_cons_contains_auto::<A>();
         assert forall|x: A| l.skip(1).filter(pred).contains(x) implies #[trigger]
-        l.contains(x) by {
-            // TODO: filter broadcast lemma is too weak (doesn't say everything
-            // in filtered list came from original list)
-            assume(false);
-        }
+        l.contains(x) by {}
         assert forall|x: A| #[trigger] l.contains(x) implies l.skip(1).filter(pred).contains(x) || x
             == a by {
             if x != a {
@@ -240,16 +236,21 @@ impl<A> Set<A> {
         ensures
             self.has_els_exact(uels),
     {
+        // let pred = |x| self.contains(x);
         let uels = els.filter(|x| self.contains(x));
-        assert forall|x: A| els.contains(x) implies uels.contains(x) by {
-            // TODO: weakness in filter spec
-            assume(false);
+        els.filter_lemma(|x| self.contains(x));
+        assert forall|x: A| self.contains(x) implies uels.contains(x) by {
+            // NOTE: this did not work, needed els.filter_lemma
+            // assert(els.contains(x));
+            // let i = choose|i: int| 0 <= i < els.len() && els[i] == x;
+            // assert(pred(x));
+            // assert(els.filter(pred).contains(els[i]));
         }
-        assert forall|x: A| uels.contains(x) implies els.contains(x) by {}
+        assert forall|x: A| uels.contains(x) implies self.contains(x) by {}
         let uels = remove_duplicates(uels);
         remove_duplicates_spec(els.filter(|x| self.contains(x)));
         assert(uels.no_duplicates());
-        assert forall|x: A| els.contains(x) <==> uels.contains(x) by {}
+        assert forall|x: A| self.contains(x) <==> uels.contains(x) by {}
         uels
     }
 
