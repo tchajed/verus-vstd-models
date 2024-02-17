@@ -3,6 +3,102 @@ use vstd::prelude::{seq, verus, Seq};
 
 verus! {
 
+pub closed spec fn remove_duplicates<A>(l: Seq<A>) -> (lu: Seq<A>)
+    decreases l.len(),
+{
+    if l.len() == 0 {
+        seq![]
+    } else {
+        let a = l[0];
+        seq![a] + remove_duplicates(l.skip(1).filter(|x| x != a))
+    }
+}
+
+pub proof fn seq_cons_contains<A>(a: A, l: Seq<A>)
+    ensures
+        forall|x: A|
+            #[trigger]
+            (seq![a] + l).contains(x) <==> x == a || #[trigger]
+            l.contains(x),
+{
+    assert forall|x: A| #[trigger] (seq![a] + l).contains(x) implies x == a || l.contains(x) by {}
+    assert forall|x: A| x == a || l.contains(x) implies #[trigger]
+    (seq![a] + l).contains(x) by {
+        if x == a {
+            assert((seq![a] + l)[0] == x);
+        } else {
+            let i = choose|i: int| 0 <= i < l.len() && l[i] == x;
+            assert((seq![a] + l)[i + 1] == x);
+        }
+    }
+}
+
+pub proof fn seq_cons_contains_auto<A>()
+    ensures
+        forall|a: A, x: A, l: Seq<A>|
+            #[trigger]
+            (seq![a] + l).contains(x) <==> x == a || #[trigger]
+            l.contains(x),
+{
+    assert forall|a: A, x: A, l: Seq<A>|
+        #[trigger]
+        (seq![a] + l).contains(x) <==> x == a || #[trigger]
+        l.contains(x) by {
+        seq_cons_contains(a, l);
+    }
+}
+
+pub proof fn seq_cons_no_duplicates<A>(a: A, l: Seq<A>)
+    requires
+        l.no_duplicates(),
+        !l.contains(a),
+    ensures
+        (seq![a] + l).no_duplicates(),
+{
+}
+
+pub proof fn remove_duplicates_spec<A>(l: Seq<A>)
+    ensures
+        forall|x: A| #[trigger] l.contains(x) <==> remove_duplicates(l).contains(x),
+        remove_duplicates(l).no_duplicates(),
+    decreases l.len(),
+{
+    if l.len() == 0 {
+        return ;
+    } else {
+        let a = l[0];
+        let pred = |x: A| x != a;
+        remove_duplicates_spec(l.skip(1).filter(pred));
+        seq_cons_contains_auto::<A>();
+        assert forall|x: A| l.skip(1).filter(pred).contains(x) implies #[trigger]
+        l.contains(x) by {
+            // TODO: filter broadcast lemma is too weak (doesn't say everything
+            // in filtered list came from original list)
+            assume(false);
+        }
+        assert forall|x: A| #[trigger] l.contains(x) implies l.skip(1).filter(pred).contains(x) || x
+            == a by {
+            if x != a {
+                assert(pred(x));
+                let i = choose|i: int| 0 <= i < l.len() && l[i] == x;
+                assert(i > 0);
+                assert(l.skip(1)[i - 1] == x);
+                assert(l.skip(1).contains(x));
+            }
+        }
+        assert forall|x: A| remove_duplicates(l).contains(x) implies #[trigger]
+        l.contains(x) by {}
+        assert(remove_duplicates(l).no_duplicates()) by {
+            if remove_duplicates(l.skip(1).filter(pred)).contains(a) {
+                assert(l.skip(1).filter(pred).contains(a));
+                assert(false);
+            }
+            seq_cons_no_duplicates(a, remove_duplicates(l.skip(1).filter(pred)));
+        }
+        return ;
+    }
+}
+
 /// `Set<A>` is a set type for specifications.
 ///
 /// An object `set: Set<A>` is a subset of the set of all values `a: A`.
@@ -144,9 +240,17 @@ impl<A> Set<A> {
         ensures
             self.has_els_exact(uels),
     {
-        // TODO
-        assume(false);
-        els
+        let uels = els.filter(|x| self.contains(x));
+        assert forall|x: A| els.contains(x) implies uels.contains(x) by {
+            // TODO: weakness in filter spec
+            assume(false);
+        }
+        assert forall|x: A| uels.contains(x) implies els.contains(x) by {}
+        let uels = remove_duplicates(uels);
+        remove_duplicates_spec(els.filter(|x| self.contains(x)));
+        assert(uels.no_duplicates());
+        assert forall|x: A| els.contains(x) <==> uels.contains(x) by {}
+        uels
     }
 
     /// Returns `true` if the set is finite.
@@ -775,7 +879,7 @@ pub proof fn lemma_set_choose_len<A>(s: Set<A>)
         #[trigger]
         s.contains(s.choose()),
 {
-    if forall |x: A| !s.contains(x) {
+    if forall|x: A| !s.contains(x) {
         lemma_set_empty_len::<A>();
         lemma_set_ext_equal(s, Set::<A>::empty());
         assert(false);
