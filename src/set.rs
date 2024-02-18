@@ -855,44 +855,43 @@ pub proof fn axiom_set_empty_len<A>()
 {
 }
 
-/*
-
-    s els1 els2
-    s.has_els_exact(els1)
-    s.has_els_exact(els2)
-
-    need to prove els1.len() == els2.len()
-
-    if els1 == seq![] {
-       s == empty()
-       els2 == seq![]
+proof fn lemma_len_unique2<A>(s: Set<A>, els1: Seq<A>, els2: Seq<A>)
+    requires
+        s.has_els_exact(els1),
+        s.has_els_exact(els2),
+    ensures
+        els1.len() == els2.len(),
+    decreases els1.len()
+{
+    if els1.len() == 0 {
+        if els2.len() != 0 {
+            assert(s.contains(els2.first()));
+            assert(false);
+        }
         return;
     }
-
-    destruct els1 -> [a] + els1_rest
-
-    assert s.remove(a).has_els_exact(els1_rest)
-    assert s.remove(a).has_els_exact(els2_rest.filter(|x| x != a))
-    by IH, els1_rest.len() == els2_rest.filter(|x| x != a).len()
-
-    assert els1.len() == els1_rest.len() + 1 (obvious)
-
-    // this step might be easier with a new recursive remove_one definition
-    // rather than filter (whose spec almost certainly can't prove this; it
-    // probably doesn't even show no_duplicates is preserved)
-    assert els2_rest.filter(|x| x != a).len() == els2_rest.len() - 1 (not at all obvious)
-
-*/
+    let els1_next = els1.drop_last();
+    let a = els1.last();
+    let s_next = s.remove(a);
+    let els2_next = remove1(els2, a);
+    assert(els2.contains(a)) by {
+        assert(els1.contains(a));
+        assert(s.contains(a));
+    }
+    remove1_spec(els2, a);
+    seq_drop_last_contains(els1);
+    lemma_len_unique2(s.remove(a), els1_next, els2_next);
+}
 
 proof fn lemma_len_unique<A>(s: Set<A>, els: Seq<A>)
     requires
         s.has_els_exact(els),
     ensures
         s.len() == els.len(),
+    decreases els.len()
 {
-    let els_len = choose|els: Seq<A>| #[trigger] s.has_els_exact(els) && els.len() == s.len();
-    // TODO
-    assume(false);
+    let els2 = choose|els_len: Seq<A>| #[trigger] s.has_els_exact(els_len) && els_len.len() == s.len();
+    lemma_len_unique2(s, els, els2);
 }
 
 pub proof fn lemma_set_insert_len<A>(s: Set<A>, a: A)
